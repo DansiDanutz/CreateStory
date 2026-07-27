@@ -4,7 +4,7 @@ A multi-model production dashboard for the **Did You Know That?** YouTube channe
 
 ## What it does
 
-- Runs current web research with Tavily (OpenAI web search fallback).
+- Runs Tavily, Firecrawl, Exa, Perplexity, GitHub, and OpenAI web research concurrently, then deduplicates evidence and optionally enriches top pages through Crawl4AI.
 - Generates independent GPT, Claude, and Kimi drafts concurrently.
 - Controls mystery, drama, action, suspense, history, science, pacing, tone, hook, audience, duration, language, and factual strictness.
 - Produces titles, narration, visual beats, sound design, CTA, and quality scores.
@@ -21,12 +21,17 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Add at least one writer key. Tavily is recommended for grounded research:
+Add at least one writer key and any research engines you want to enable:
 
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `MOONSHOT_API_KEY`
 - `TAVILY_API_KEY`
+- `FIRECRAWL_API_KEY`
+- `EXA_API_KEY`
+- `PERPLEXITY_API_KEY`
+- `GITHUB_TOKEN` (optional; public search works at a lower rate without it)
+- `CRAWL4AI_BASE_URL` and optionally `CRAWL4AI_API_TOKEN`
 - `STORYLAB_ACCESS_CODE` (required for a public deployment)
 
 All keys are read only by server routes. Never use a `NEXT_PUBLIC_` prefix for provider credentials. Production fails closed unless the access code is at least 32 characters; use a randomly generated value. The endpoint’s process-local IP throttle is only a burst dampener on each serverless instance—the high-entropy access code is the primary public cost-control boundary. For shared multi-user use, replace it with authenticated accounts and a distributed quota store.

@@ -3,7 +3,7 @@ import type { GenerateInput, Source } from "./types";
 const targets = { short: "130–170 words (about 60 seconds)", standard: "190–260 words (about 90 seconds)", deep: "330–430 words (2–3 minutes)" };
 
 export function buildWriterPrompt(input: GenerateInput, summary: string, sources: Source[], providerName: string): string {
-  const evidence = sources.map((source, index) => `[${index + 1}] ${source.title}\n${source.snippet}\n${source.url}`).join("\n\n");
+  const evidence = sources.map((source, index) => `[${index + 1}] ${source.title}${source.engine ? ` (${source.engine})` : ""}\n${source.snippet}\n${source.url}`).join("\n\n");
   return `You are ${providerName}, working independently as an elite factual YouTube storyteller for the channel “Did You Know That?”.
 
 SUBJECT: ${input.subject}

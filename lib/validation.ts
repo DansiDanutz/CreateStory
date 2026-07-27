@@ -1,4 +1,4 @@
-import { GENRES, PROVIDERS, TONES, type GenerateInput, type Provider } from "./types";
+import { GENRES, PROVIDERS, RESEARCH_ENGINES, TONES, type GenerateInput, type Provider, type ResearchEngine } from "./types";
 
 const allowed = <T extends readonly string[]>(value: unknown, values: T): value is T[number] =>
   typeof value === "string" && values.includes(value as T[number]);
@@ -18,6 +18,11 @@ export function validateInput(value: unknown): GenerateInput {
     ? [...new Set(input.genres.filter((item): item is string => allowed(item, GENRES)))].slice(0, 8)
     : [];
   if (!genres.length) throw new Error("Select at least one story genre.");
+
+  const researchEngines = Array.isArray(input.researchEngines)
+    ? [...new Set(input.researchEngines.filter((item): item is ResearchEngine => allowed(item, RESEARCH_ENGINES)))]
+    : [...RESEARCH_ENGINES];
+  if (!researchEngines.length) throw new Error("Select at least one research engine.");
 
   const tone = allowed(input.tone, TONES) ? input.tone : "Cinematic";
   const oneOf = <T extends string>(v: unknown, values: readonly T[], fallback: T): T =>
@@ -39,5 +44,6 @@ export function validateInput(value: unknown): GenerateInput {
     includeCta: input.includeCta !== false,
     includeTitleIdeas: input.includeTitleIdeas !== false,
     researchDepth: oneOf(input.researchDepth, ["quick", "standard", "deep"], "standard"),
+    researchEngines,
   };
 }

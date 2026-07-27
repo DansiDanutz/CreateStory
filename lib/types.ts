@@ -1,6 +1,9 @@
 export const PROVIDERS = ["openai", "anthropic", "kimi"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
+export const RESEARCH_ENGINES = ["tavily", "firecrawl", "exa", "perplexity", "github", "openai", "crawl4ai"] as const;
+export type ResearchEngine = (typeof RESEARCH_ENGINES)[number];
+
 export const GENRES = [
   "Mystery", "Drama", "Action", "Suspense", "History", "Science",
   "Dark", "Inspiring", "Adventure", "Conspiracy", "Horror", "Educational",
@@ -24,12 +27,14 @@ export interface GenerateInput {
   includeCta: boolean;
   includeTitleIdeas: boolean;
   researchDepth: "quick" | "standard" | "deep";
+  researchEngines: ResearchEngine[];
 }
 
 export interface Source {
   title: string;
   url: string;
   snippet: string;
+  engine?: string;
 }
 
 export interface ScriptResult {

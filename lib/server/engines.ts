@@ -1,6 +1,6 @@
 import { buildResearchQuery, buildWriterPrompt } from "../prompt";
 import { finalizeScript } from "../scoring";
-import type { GenerateInput, Provider, ScriptResult, Source } from "../types";
+import type { GenerateInput, Provider, ResearchEngine, ScriptResult, Source } from "../types";
 
 const timeoutMs = 110_000;
 
@@ -44,43 +44,137 @@ function normalize(provider: Provider, model: string, text: string): ScriptResul
   });
 }
 
+type ResearchBatch = { engine: string; sources: Source[]; summary?: string };
+
+const resultCount = (input: GenerateInput) => input.researchDepth === "deep" ? 7 : input.researchDepth === "quick" ? 3 : 5;
+const isHttpUrl = (value: unknown): value is string => typeof value === "string" && /^https?:\/\//i.test(value);
+const source = (engine: string, title: unknown, url: unknown, snippet: unknown): Source | null => isHttpUrl(url) ? {
+  title: typeof title === "string" && title.trim() ? title.trim() : url,
+  url,
+  snippet: typeof snippet === "string" ? snippet.replace(/\s+/g, " ").trim().slice(0, 1_200) : "",
+  engine,
+} : null;
+
+async function searchTavily(input: GenerateInput): Promise<ResearchBatch> {
+  if (!process.env.TAVILY_API_KEY) throw new Error("not configured");
+  const response = await apiFetch("https://api.tavily.com/search", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query: buildResearchQuery(input), search_depth: input.researchDepth === "quick" ? "basic" : "advanced", max_results: resultCount(input), include_answer: true }),
+  });
+  const data = await response.json() as { answer?: string; results?: Array<{ title?: string; url?: string; content?: string }> };
+  return { engine: "Tavily", summary: data.answer, sources: (data.results || []).map(item => source("Tavily", item.title, item.url, item.content)).filter((item): item is Source => Boolean(item)) };
+}
+
+async function searchFirecrawl(input: GenerateInput): Promise<ResearchBatch> {
+  if (!process.env.FIRECRAWL_API_KEY) throw new Error("not configured");
+  const response = await apiFetch("https://api.firecrawl.dev/v2/search", {
+    method: "POST", headers: { Authorization: `Bearer ${process.env.FIRECRAWL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query: buildResearchQuery(input), limit: resultCount(input), sources: ["web"], scrapeOptions: { formats: [{ type: "markdown" }] } }),
+  });
+  const data = await response.json() as { data?: { web?: Array<{ title?: string; url?: string; description?: string; markdown?: string }> } };
+  return { engine: "Firecrawl", sources: (data.data?.web || []).map(item => source("Firecrawl", item.title, item.url, item.markdown || item.description)).filter((item): item is Source => Boolean(item)) };
+}
+
+async function searchExa(input: GenerateInput): Promise<ResearchBatch> {
+  if (!process.env.EXA_API_KEY) throw new Error("not configured");
+  const response = await apiFetch("https://api.exa.ai/search", {
+    method: "POST", headers: { "x-api-key": process.env.EXA_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ query: buildResearchQuery(input), numResults: resultCount(input), type: input.researchDepth === "deep" ? "deep-lite" : input.researchDepth === "quick" ? "fast" : "auto", moderation: true, contents: { highlights: true } }),
+  });
+  const data = await response.json() as { results?: Array<{ title?: string; url?: string; text?: string; summary?: string; highlights?: string[] }> };
+  return { engine: "Exa", sources: (data.results || []).map(item => source("Exa", item.title, item.url, item.summary || item.highlights?.join(" ") || item.text)).filter((item): item is Source => Boolean(item)) };
+}
+
+async function searchPerplexity(input: GenerateInput): Promise<ResearchBatch> {
+  if (!process.env.PERPLEXITY_API_KEY) throw new Error("not configured");
+  const response = await apiFetch("https://api.perplexity.ai/search", {
+    method: "POST", headers: { Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query: buildResearchQuery(input), max_results: resultCount(input), max_tokens_per_page: 900 }),
+  });
+  const data = await response.json() as { results?: Array<{ title?: string; url?: string; snippet?: string }> };
+  return { engine: "Perplexity", sources: (data.results || []).map(item => source("Perplexity", item.title, item.url, item.snippet)).filter((item): item is Source => Boolean(item)) };
+}
+
+async function searchGitHub(input: GenerateInput): Promise<ResearchBatch> {
+  const headers: Record<string, string> = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const query = encodeURIComponent(`${input.subject} archive OR dataset OR research in:name,description,readme`);
+  const url = `https://api.github.com/search/repositories?q=${query}&sort=stars&order=desc&per_page=${resultCount(input)}`;
+  let response = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+  if (response.status === 401 && headers.Authorization) {
+    delete headers.Authorization;
+    response = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+  }
+  if (!response.ok) throw new Error("GitHub search is temporarily unavailable.");
+  const data = await response.json() as { items?: Array<{ full_name?: string; html_url?: string; description?: string; stargazers_count?: number; language?: string }> };
+  return { engine: "GitHub", sources: (data.items || []).map(item => source("GitHub", item.full_name, item.html_url, `${item.description || "Open-source repository"}. ${item.stargazers_count || 0} stars${item.language ? ` · ${item.language}` : ""}. Treat as a community or technical source, not primary historical evidence.`)).filter((item): item is Source => Boolean(item)) };
+}
+
+async function searchOpenAI(input: GenerateInput): Promise<ResearchBatch> {
+  if (!process.env.OPENAI_API_KEY) throw new Error("not configured");
+  const response = await apiFetch("https://api.openai.com/v1/responses", {
+    method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-5", tools: [{ type: "web_search" }], input: `Research ${buildResearchQuery(input)}. Return a concise evidence brief and include source URLs.`, max_output_tokens: 1800 }),
+  });
+  const data = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ text?: string; annotations?: Array<{ title?: string; url?: string }> }> }> };
+  const blocks = data.output?.flatMap(item => item.content || []) || [];
+  const sources = blocks.flatMap(block => (block.annotations || []).map(note => source("OpenAI Web", note.title, note.url, "Referenced by OpenAI web research."))).filter((item): item is Source => Boolean(item));
+  return { engine: "OpenAI Web", summary: data.output_text || blocks.map(block => block.text || "").join("\n"), sources };
+}
+
+async function enrichWithCrawl4AI(sources: Source[]): Promise<Source[]> {
+  if (!process.env.CRAWL4AI_BASE_URL || !sources.length) return sources;
+  const baseUrl = process.env.CRAWL4AI_BASE_URL.replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(baseUrl)) return sources;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (process.env.CRAWL4AI_API_TOKEN) headers.Authorization = `Bearer ${process.env.CRAWL4AI_API_TOKEN}`;
+  const targets = sources.slice(0, 4);
+  try {
+    const response = await apiFetch(`${baseUrl}/crawl`, {
+      method: "POST", headers,
+      body: JSON.stringify({ urls: targets.map(item => item.url), browser_config: { type: "BrowserConfig", params: { headless: true } }, crawler_config: { type: "CrawlerRunConfig", params: { word_count_threshold: 20, exclude_external_links: true } } }),
+    });
+    const data = await response.json() as { results?: Array<{ url?: string; markdown?: string | { raw_markdown?: string }; title?: string }>; data?: Array<{ url?: string; markdown?: string | { raw_markdown?: string }; title?: string }> } | Array<{ url?: string; markdown?: string | { raw_markdown?: string }; title?: string }>;
+    const crawled = Array.isArray(data) ? data : data.results || data.data || [];
+    const contentByUrl = new Map(crawled.filter(item => isHttpUrl(item.url)).map(item => [item.url!, typeof item.markdown === "string" ? item.markdown : item.markdown?.raw_markdown || ""]));
+    return sources.map(item => contentByUrl.get(item.url) ? { ...item, snippet: contentByUrl.get(item.url)!.replace(/\s+/g, " ").slice(0, 1_200), engine: `${item.engine} + Crawl4AI` } : item);
+  } catch { return sources; }
+}
+
+const searchers: Record<Exclude<ResearchEngine, "crawl4ai">, (input: GenerateInput) => Promise<ResearchBatch>> = {
+  tavily: searchTavily, firecrawl: searchFirecrawl, exa: searchExa, perplexity: searchPerplexity, github: searchGitHub, openai: searchOpenAI,
+};
+
 export async function research(input: GenerateInput): Promise<{ summary: string; sources: Source[]; engine: string }> {
-  const researchWasConfigured = Boolean(process.env.TAVILY_API_KEY || process.env.OPENAI_API_KEY);
-  if (process.env.TAVILY_API_KEY) {
-    try {
-      const maxResults = input.researchDepth === "deep" ? 10 : input.researchDepth === "quick" ? 4 : 7;
-      const response = await apiFetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query: buildResearchQuery(input), search_depth: input.researchDepth === "quick" ? "basic" : "advanced", max_results: maxResults, include_answer: true }),
-      });
-      const data = await response.json() as { answer?: string; results?: Array<{ title?: string; url?: string; content?: string }> };
-      const sources = (data.results || []).filter(item => item.url && /^https?:\/\//i.test(item.url)).map(item => ({ title: item.title || item.url!, url: item.url!, snippet: (item.content || "").slice(0, 900) }));
-      if (sources.length) return { summary: data.answer || "Use the collected source notes to identify the strongest verifiable narrative.", sources, engine: "Tavily Advanced Search" };
-    } catch { /* continue to the next configured research engine */ }
+  const selectedSearchers = input.researchEngines.filter((engine): engine is Exclude<ResearchEngine, "crawl4ai"> => engine !== "crawl4ai");
+  const settled = await Promise.allSettled(selectedSearchers.map(engine => searchers[engine](input)));
+  const batches = settled.flatMap(result => result.status === "fulfilled" && result.value.sources.length ? [result.value] : []);
+  const maxSources = input.researchDepth === "deep" ? 20 : input.researchDepth === "quick" ? 8 : 14;
+  const seen = new Set<string>();
+  let sources: Source[] = [];
+  for (let index = 0; sources.length < maxSources; index += 1) {
+    let added = false;
+    for (const batch of batches) {
+      const item = batch.sources[index];
+      if (!item) continue;
+      const key = item.url.replace(/\/$/, "").toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key); sources.push(item); added = true;
+      if (sources.length === maxSources) break;
+    }
+    if (!added) break;
   }
-
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const response = await apiFetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-5", tools: [{ type: "web_search" }], input: `Research ${buildResearchQuery(input)}. Return a concise evidence brief and include source URLs.`, max_output_tokens: 1800 }),
-      });
-      const data = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ text?: string; annotations?: Array<{ title?: string; url?: string }> }> }> };
-      const blocks = data.output?.flatMap(item => item.content || []) || [];
-      const sourceMap = new Map<string, Source>();
-      for (const block of blocks) for (const note of block.annotations || []) if (note.url && /^https?:\/\//i.test(note.url)) sourceMap.set(note.url, { title: note.title || note.url, url: note.url, snippet: "Referenced by OpenAI web research." });
-      return { summary: data.output_text || blocks.map(block => block.text || "").join("\n"), sources: [...sourceMap.values()], engine: "OpenAI Web Search" };
-    } catch { /* fall through to a safe knowledge-only brief */ }
-  }
-
-  return {
-    summary: researchWasConfigured
-      ? "The configured web research services were temporarily unavailable. Writers must avoid unsupported precise claims and clearly qualify uncertainty."
-      : "No web research credential is configured. Writers must avoid unsupported precise claims and clearly qualify uncertainty.",
+  if (input.researchEngines.includes("crawl4ai")) sources = await enrichWithCrawl4AI(sources);
+  const engines = [...new Set(sources.map(item => item.engine?.replace(" + Crawl4AI", "")).filter(Boolean))];
+  const synthesis = batches.map(batch => batch.summary).find((value): value is string => Boolean(value?.trim()));
+  return sources.length ? {
+    summary: synthesis || `${engines.join(", ")} collected ${sources.length} deduplicated sources. Compare claims across sources, prefer primary or institutional evidence, and treat GitHub repositories as supporting technical/community material only.`,
+    sources,
+    engine: `${engines.join(" + ")}${sources.some(item => item.engine?.includes("Crawl4AI")) ? " + Crawl4AI" : ""}`,
+  } : {
+    summary: "The selected research services were unavailable or not configured. Writers must avoid unsupported precise claims and clearly qualify uncertainty.",
     sources: [],
-    engine: researchWasConfigured ? "Research unavailable — knowledge-only mode" : "Knowledge-only fallback",
+    engine: "Research unavailable — knowledge-only mode",
   };
 }
 

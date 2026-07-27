@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { GENRES, PROVIDERS, TONES, type Capabilities, type GenerateInput, type GenerateResponse, type Provider, type ScriptResult } from "@/lib/types";
+import { GENRES, PROVIDERS, RESEARCH_ENGINES, TONES, type Capabilities, type GenerateInput, type GenerateResponse, type Provider, type ResearchEngine, type ScriptResult } from "@/lib/types";
 
 const providerMeta: Record<Provider, { name: string; mark: string; color: string }> = {
   openai: { name: "GPT", mark: "G", color: "emerald" },
   anthropic: { name: "Claude", mark: "C", color: "coral" },
   kimi: { name: "Kimi", mark: "K", color: "violet" },
+};
+
+const researchMeta: Record<ResearchEngine, { name: string; role: string }> = {
+  tavily: { name: "Tavily", role: "deep web search" },
+  firecrawl: { name: "Firecrawl", role: "search + scrape" },
+  exa: { name: "Exa", role: "semantic search" },
+  perplexity: { name: "Perplexity", role: "ranked live search" },
+  github: { name: "GitHub", role: "repositories & archives" },
+  openai: { name: "OpenAI Web", role: "agentic fallback" },
+  crawl4ai: { name: "Crawl4AI", role: "page enrichment" },
 };
 
 const initial: GenerateInput = {
@@ -25,6 +35,7 @@ const initial: GenerateInput = {
   includeCta: true,
   includeTitleIdeas: true,
   researchDepth: "standard",
+  researchEngines: [...RESEARCH_ENGINES],
 };
 
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: () => void; label: string; hint?: string }) {
@@ -91,7 +102,7 @@ export default function Home() {
   }, []);
 
   const readyProviders = useMemo(() => input.providers.filter(p => capabilities?.providers[p].configured !== false).length, [input.providers, capabilities]);
-  const toggleArray = (key: "genres" | "providers", value: string) => setInput(current => {
+  const toggleArray = (key: "genres" | "providers" | "researchEngines", value: string) => setInput(current => {
     const list = current[key] as string[];
     const next = list.includes(value) ? list.filter(item => item !== value) : [...list, value];
     return next.length ? { ...current, [key]: next } : current;
@@ -165,6 +176,8 @@ export default function Home() {
             <div className="segmented">{(["strict", "balanced", "creative"] as const).map(v => <button key={v} className={input.factuality === v ? "selected" : ""} onClick={() => update("factuality", v)}>{v}</button>)}</div>
             <div className="segmented-label">Research depth</div>
             <div className="segmented">{(["quick", "standard", "deep"] as const).map(v => <button key={v} className={input.researchDepth === v ? "selected" : ""} onClick={() => update("researchDepth", v)}>{v}</button>)}</div>
+            <div className="segmented-label">Research engines</div>
+            <div className="research-engines">{RESEARCH_ENGINES.map(engine => <button key={engine} className={input.researchEngines.includes(engine) ? "selected" : ""} onClick={() => toggleArray("researchEngines", engine)}><strong>{researchMeta[engine].name}</strong><small>{researchMeta[engine].role}</small><i>{capabilities?.research[researchMeta[engine].name] === false ? "setup" : "on"}</i></button>)}</div>
           </section>
 
           <section className="control-panel engines-panel">
@@ -176,7 +189,7 @@ export default function Home() {
 
         {loading && <section className="pipeline"><div className="pipeline-title"><span className="spinner dark" /><div><strong>Researching, verifying, writing…</strong><small>Three independent creative rooms are working in parallel. This can take 1–3 minutes.</small></div></div><div className="pipeline-steps"><span className="done">Subject brief</span><span className="active">Web research</span><span>Independent drafts</span><span>Quality pass</span></div></section>}
         {error && <div className="global-error"><strong>Generation stopped</strong><span>{error}</span><button onClick={generate}>Try again</button></div>}
-        {result && <section className="results"><header><div><span className="eyebrow">RUN COMPLETE · {result.researchEngine.toUpperCase()}</span><h2>Three minds. Three stories.</h2><p>{result.sources.length} sources grounded this run · {new Date(result.createdAt).toLocaleString()}</p></div><a href="#sources">Review sources ↓</a></header><div className="story-grid">{result.results.map(story => <StoryCard key={story.provider} result={story} sources={result.sources} />)}</div><div id="sources" className="sources"><div><span>RESEARCH BRIEF</span><p>{result.researchSummary}</p></div><ol>{result.sources.map((source, i) => <li key={source.url}><span>{String(i + 1).padStart(2, "0")}</span><a href={source.url} target="_blank" rel="noreferrer"><strong>{source.title}</strong><small>{new URL(source.url).hostname} ↗</small></a></li>)}</ol></div></section>}
+        {result && <section className="results"><header><div><span className="eyebrow">RUN COMPLETE · {result.researchEngine.toUpperCase()}</span><h2>Three minds. Three stories.</h2><p>{result.sources.length} sources grounded this run · {new Date(result.createdAt).toLocaleString()}</p></div><a href="#sources">Review sources ↓</a></header><div className="story-grid">{result.results.map(story => <StoryCard key={story.provider} result={story} sources={result.sources} />)}</div><div id="sources" className="sources"><div><span>RESEARCH BRIEF</span><p>{result.researchSummary}</p></div><ol>{result.sources.map((source, i) => <li key={source.url}><span>{String(i + 1).padStart(2, "0")}</span><a href={source.url} target="_blank" rel="noreferrer"><strong>{source.title}</strong><small>{source.engine ? `${source.engine} · ` : ""}{new URL(source.url).hostname} ↗</small></a></li>)}</ol></div></section>}
       </>}
 
       {view === "stack" && <StackView capabilities={capabilities} />}
