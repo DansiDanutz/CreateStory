@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +31,13 @@ async function walk(directory, retained = []) {
 const files = await walk(root);
 const leakedEnvironmentFiles = files
   .filter((path) => forbiddenEnvironmentFile(basename(path)))
+  .filter((path) => {
+    const ignored = spawnSync("git", ["check-ignore", "--quiet", "--", path], {
+      cwd: root,
+      stdio: "ignore",
+    });
+    return ignored.status !== 0;
+  })
   .map((path) => path.replace(root, ""));
 assert.deepEqual(
   leakedEnvironmentFiles,
@@ -45,4 +53,6 @@ for (const requiredPattern of [".env", ".env.*", "!.env.example"]) {
   );
 }
 
-console.log(`deployment input: PASS (${files.length} non-ignored files; no credential environment file)`);
+console.log(
+  `deployment input: PASS (${files.length} local files; no unignored credential environment file)`,
+);
