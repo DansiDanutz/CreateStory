@@ -1,0 +1,27 @@
+{
+  "commentTypes": ["logic", "syntax"],
+  "strictness": 2,
+  "triggerOnUpdates": true,
+  "statusCheck": true,
+  "statusCommentsEnabled": true,
+  "comment": "AI-generated review; verified tests, required checks, and human approval remain merge gates.",
+  "instructions": "Review for exploitable security, authorization, paid-provider abuse, secret exposure, input bounds, concurrency, supply-chain integrity, and production-readiness defects. Require file and line evidence. Avoid style-only comments.",
+  "ignoreKeywords": "greptile-ignore",
+  "ignorePatterns": "node_modules/**\n.next/**\ncoverage/**\ndist/**\nbuild/**",
+  "summarySection": {"included": true, "collapsible": false, "defaultOpen": false},
+  "issuesTableSection": {"included": true, "collapsible": false, "defaultOpen": false},
+  "confidenceScoreSection": {"included": true, "collapsible": false, "defaultOpen": false},
+  "customContext": {
+    "rules": [
+      {"scope": ["**/*"], "rule": "EVIDENCE: report only actionable defects with file:line evidence, a concrete failure mode, and concise remediation."},
+      {"scope": ["app/api/**", "lib/server/**"], "rule": "PAID PROVIDERS: every route capable of consuming provider credits must authenticate server-side, fail closed on missing configuration, bound requests and outputs, and enforce durable abuse controls."},
+      {"scope": ["**/*"], "rule": "SECRETS: flag hardcoded credentials, environment files in deployment inputs, secrets exposed to clients or logs, and placeholder values that could be mistaken for production credentials."},
+      {"scope": ["**/*"], "rule": "INPUT: validate and bound untrusted input at the boundary, including body size, arrays, strings, provider selections, URLs, redirects, and response retention."},
+      {"scope": ["**/*"], "rule": "FAIL-CLOSED: authentication, authorization, deployment gates, and provider selection must deny when configuration is absent, ambiguous, or invalid."},
+      {"scope": ["**/*"], "rule": "CONCURRENCY: flag serverless in-memory security state, read-then-write races, duplicate expensive work, and missing idempotency on retryable operations."},
+      {"scope": ["package.json", "package-lock.json", ".github/workflows/**"], "rule": "SUPPLY CHAIN: require lockfile installs, immutable workflow dependencies, vulnerability gates, and exact deploy provenance."},
+      {"scope": ["tests/**", "scripts/**"], "rule": "TESTS: security behavior changes require executable regressions that exercise the actual failure boundary and can fail for the reported defect."}
+    ],
+    "files": []
+  }
+}

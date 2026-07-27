@@ -1,0 +1,10 @@
+.git
+.github
+.omx
+.env
+.env.*
+!.env.example
+coverage
+node_modules
+*.log
+*.tsbuildinfo
