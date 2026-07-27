@@ -77,6 +77,15 @@ function StoryCard({ result, sources }: { result: ScriptResult; sources: Generat
   </article>;
 }
 
+async function readApiResponse<T>(response: Response): Promise<T> {
+  const body = await response.text();
+  try { return JSON.parse(body) as T; }
+  catch {
+    const message = body.trim().split("\n")[0];
+    throw new Error(message || `The server returned an invalid response (${response.status}).`);
+  }
+}
+
 export default function Home() {
   const [input, setInput] = useState(initial);
   const [result, setResult] = useState<GenerateResponse | null>(null);
@@ -95,7 +104,7 @@ export default function Home() {
       setAccessCode(savedCode);
       fetch("/api/capabilities", { headers: { "x-storylab-access-code": savedCode } }).then(async response => {
         if (!response.ok) { setAccessStatus("locked"); return; }
-        setCapabilities(await response.json()); setAccessStatus("ready");
+        setCapabilities(await readApiResponse<Capabilities>(response)); setAccessStatus("ready");
       }).catch(() => setAccessStatus("locked"));
     }, 0);
     return () => window.clearTimeout(loadHistory);
@@ -111,14 +120,14 @@ export default function Home() {
   const connectStudio = async () => {
     const response = await fetch("/api/capabilities", { headers: { "x-storylab-access-code": accessCode } });
     if (!response.ok) { setAccessStatus("locked"); setError("That studio access code is not valid."); return; }
-    sessionStorage.setItem("storylab-access", accessCode); setCapabilities(await response.json()); setAccessStatus("ready"); setError("");
+    sessionStorage.setItem("storylab-access", accessCode); setCapabilities(await readApiResponse<Capabilities>(response)); setAccessStatus("ready"); setError("");
   };
 
   const generate = async () => {
     setLoading(true); setError(""); setResult(null);
     try {
       const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "x-storylab-access-code": accessCode }, body: JSON.stringify(input) });
-      const data = await response.json();
+      const data = await readApiResponse<GenerateResponse & { error?: string }>(response);
       if (!response.ok) throw new Error(data.error || "The studio could not complete this run.");
       setResult(data);
       const next = [data, ...history.filter(item => item.id !== data.id)].slice(0, 12);
