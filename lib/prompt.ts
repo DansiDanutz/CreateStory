@@ -1,6 +1,22 @@
 import type { GenerateInput, Source } from "./types";
 
-const targets = { short: "130–170 words (about 60 seconds)", standard: "190–260 words (about 90 seconds)", deep: "330–430 words (2–3 minutes)" };
+const targets = {
+  short: "130–170 words (about 60 seconds)",
+  standard: "190–260 words (about 90 seconds)",
+  deep: "330–430 words (2–3 minutes)",
+  five: "700–850 words (about 5 minutes)",
+  ten: "1,400–1,650 words (about 10 minutes)",
+  fifteen: "2,100–2,400 words (about 15 minutes)",
+};
+
+const productionBeats = {
+  short: "6–10 concise scene directions",
+  standard: "8–12 concise scene directions",
+  deep: "12–18 concise scene directions",
+  five: "18–25 concise scene directions",
+  ten: "30–40 concise scene directions",
+  fifteen: "45–60 concise scene directions",
+};
 
 export function buildWriterPrompt(input: GenerateInput, summary: string, sources: Source[], providerName: string): string {
   const evidence = sources.map((source, index) => `[${index + 1}] ${source.title}${source.engine ? ` (${source.engine})` : ""}\n${source.snippet}\n${source.url}`).join("\n\n");
@@ -28,8 +44,8 @@ Return ONLY valid JSON matching this shape:
   "titleIdeas": ${input.includeTitleIdeas ? "[\"three optional titles\"]" : "[]"},
   "hook": "the exact opening line",
   "narration": "complete voiceover with short paragraphs",
-  "visualBeats": ["${input.includeVisuals ? "6–10 concise scene directions" : "leave empty"}"],
-  "soundDesign": ["${input.includeSfx ? "3–6 music or SFX cues" : "leave empty"}"],
+  "visualBeats": ["${input.includeVisuals ? productionBeats[input.duration] : "leave empty"}"],
+  "soundDesign": ["${input.includeSfx ? "music and SFX cues spaced naturally across the full runtime" : "leave empty"}"],
   "cta": "${input.includeCta ? "one natural channel CTA" : "leave empty"}",
   "whyItWorks": "2 concise sentences explaining the retention strategy",
   "scores": {"hook": 1, "retention": 1, "clarity": 1, "originality": 1, "factuality": 1}

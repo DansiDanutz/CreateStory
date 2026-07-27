@@ -156,7 +156,7 @@ export default function Home() {
             <hr />
             <div className="field-grid">
               <label>Tone<select value={input.tone} onChange={e => update("tone", e.target.value)}>{TONES.map(tone => <option key={tone}>{tone}</option>)}</select></label>
-              <label>Duration<select value={input.duration} onChange={e => update("duration", e.target.value as GenerateInput["duration"])}><option value="short">~60 sec</option><option value="standard">~90 sec</option><option value="deep">2–3 min</option></select></label>
+              <label>Duration<select value={input.duration} onChange={e => update("duration", e.target.value as GenerateInput["duration"])}><option value="short">~60 sec</option><option value="standard">~90 sec</option><option value="deep">2–3 min</option><option value="five">~5 min</option><option value="ten">~10 min</option><option value="fifteen">~15 min</option></select></label>
               <label>Pacing<select value={input.pacing} onChange={e => update("pacing", e.target.value as GenerateInput["pacing"])}><option value="fast">Fast cuts</option><option value="balanced">Balanced</option><option value="slow-burn">Slow burn</option></select></label>
               <label>Hook style<select value={input.hookStyle} onChange={e => update("hookStyle", e.target.value)}><option>Impossible question</option><option>Cold open</option><option>Shocking fact</option><option>In medias res</option><option>Personal confession</option></select></label>
               <label>Audience<input value={input.audience} onChange={e => update("audience", e.target.value)} /></label>

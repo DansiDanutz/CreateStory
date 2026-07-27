@@ -16,7 +16,7 @@ export interface GenerateInput {
   providers: Provider[];
   genres: string[];
   tone: string;
-  duration: "short" | "standard" | "deep";
+  duration: "short" | "standard" | "deep" | "five" | "ten" | "fifteen";
   audience: string;
   language: string;
   hookStyle: string;

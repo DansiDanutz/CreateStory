@@ -178,13 +178,20 @@ export async function research(input: GenerateInput): Promise<{ summary: string;
   };
 }
 
+function writerTokenLimit(input: GenerateInput): number {
+  if (input.duration === "fifteen") return 12_000;
+  if (input.duration === "ten") return 9_000;
+  if (input.duration === "five") return 7_000;
+  return 5_000;
+}
+
 async function writeOpenAI(input: GenerateInput, summary: string, sources: Source[]): Promise<ScriptResult> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
   const model = process.env.OPENAI_MODEL || "gpt-5";
   const response = await apiFetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, input: buildWriterPrompt(input, summary, sources, "GPT"), max_output_tokens: 5000 }),
+    body: JSON.stringify({ model, input: buildWriterPrompt(input, summary, sources, "GPT"), max_output_tokens: writerTokenLimit(input) }),
   });
   const data = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
   const text = data.output_text || data.output?.flatMap(item => item.content || []).map(item => item.text || "").join("") || "";
@@ -198,7 +205,7 @@ async function writeAnthropic(input: GenerateInput, summary: string, sources: So
   const response = await apiFetch(`${anthropicBaseUrl}/v1/messages`, {
     method: "POST",
     headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({ model, max_tokens: 5000, messages: [{ role: "user", content: buildWriterPrompt(input, summary, sources, "Claude") }] }),
+    body: JSON.stringify({ model, max_tokens: writerTokenLimit(input), messages: [{ role: "user", content: buildWriterPrompt(input, summary, sources, "Claude") }] }),
   });
   const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
   return normalize("anthropic", model, (data.content || []).filter(item => item.type === "text").map(item => item.text || "").join(""));
@@ -211,7 +218,7 @@ async function writeKimi(input: GenerateInput, summary: string, sources: Source[
   const response = await apiFetch("https://api.moonshot.ai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, temperature: 1, max_tokens: 5000, messages: [{ role: "system", content: "You are an independent, meticulous, original factual storyteller." }, { role: "user", content: buildWriterPrompt(input, summary, sources, "Kimi") }] }),
+    body: JSON.stringify({ model, temperature: 1, max_tokens: writerTokenLimit(input), messages: [{ role: "system", content: "You are an independent, meticulous, original factual storyteller." }, { role: "user", content: buildWriterPrompt(input, summary, sources, "Kimi") }] }),
   });
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   return normalize("kimi", model, data.choices?.[0]?.message?.content || "");

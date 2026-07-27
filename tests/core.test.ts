@@ -37,6 +37,13 @@ test("writer prompt carries evidence, format, and factual constraints", () => {
   assert.match(prompt, /Return ONLY valid JSON/);
 });
 
+test("long-form durations request a complete 15-minute production script", () => {
+  const longInput = validateInput({ ...input, duration: "fifteen" });
+  const prompt = buildWriterPrompt(longInput, "A documented event.", [], "Kimi");
+  assert.match(prompt, /2,100–2,400 words/);
+  assert.match(prompt, /45–60 concise scene directions/);
+});
+
 test("research query requests verification and story details", () => {
   const query = buildResearchQuery(input);
   assert.match(query, /verified surprising facts/);

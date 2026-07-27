@@ -33,7 +33,7 @@ export function validateInput(value: unknown): GenerateInput {
     providers,
     genres,
     tone,
-    duration: oneOf(input.duration, ["short", "standard", "deep"], "standard"),
+    duration: oneOf(input.duration, ["short", "standard", "deep", "five", "ten", "fifteen"], "standard"),
     audience: typeof input.audience === "string" ? input.audience.slice(0, 80) : "Curious adults 18–44",
     language: typeof input.language === "string" ? input.language.slice(0, 40) : "English",
     hookStyle: typeof input.hookStyle === "string" ? input.hookStyle.slice(0, 80) : "Impossible question",
