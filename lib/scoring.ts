@@ -14,12 +14,14 @@ export function finalizeScript(result: Omit<ScriptResult, "wordCount" | "estimat
   };
   scores.overall = Math.round(scores.hook * .24 + scores.retention * .28 + scores.clarity * .16 + scores.originality * .14 + scores.factuality * .18);
   const citedSourceIndexes = [...new Set([...result.narration.matchAll(/\[(\d{1,2})\]/g)].map(match => Number(match[1])).filter(index => index > 0 && index <= sources.length))].sort((a, b) => a - b);
-  const coverage = sources.length ? Math.round(citedSourceIndexes.length / Math.min(sources.length, 8) * 100) : 0;
+  const substantiveSentences = result.narration.split(/(?<=[.!?])\s+/).filter(sentence => sentence.replace(/\[\d{1,2}\]/g, "").trim().split(/\s+/).length >= 5);
+  const citedSentences = substantiveSentences.filter(sentence => [...sentence.matchAll(/\[(\d{1,2})\]/g)].some(match => Number(match[1]) > 0 && Number(match[1]) <= sources.length));
+  const coverage = sources.length && substantiveSentences.length ? Math.round(citedSentences.length / substantiveSentences.length * 100) : 0;
   const warnings: string[] = [];
   if (!sources.length) warnings.push("No external evidence was available for this draft.");
   else if (!citedSourceIndexes.length) warnings.push("The narration contains no inline source markers.");
   if (/\b(?:allegedly|perhaps|possibly|legend says|some believe)\b/i.test(result.narration)) warnings.push("Qualified or legendary claims need editorial review.");
-  const factCheck = { status: (!sources.length ? "unverified" : citedSourceIndexes.length >= Math.min(3, sources.length) ? "grounded" : "review") as NonNullable<ScriptResult["factCheck"]>["status"], coverage: Math.min(100, coverage), warnings };
+  const factCheck = { status: (!sources.length ? "unverified" : coverage >= 80 && citedSourceIndexes.length >= Math.min(3, sources.length) ? "grounded" : "review") as NonNullable<ScriptResult["factCheck"]>["status"], coverage: Math.min(100, coverage), warnings };
   return { ...result, titleIdeas: result.titleIdeas || [], visualBeats: result.visualBeats || [], soundDesign: result.soundDesign || [], cta: result.cta || "", whyItWorks: result.whyItWorks || "", wordCount, estimatedSeconds: Math.max(1, Math.round(wordCount / 2.55)), scores, citedSourceIndexes, factCheck };
 }
 
