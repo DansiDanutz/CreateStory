@@ -36,7 +36,7 @@ ${summary}
 SOURCE NOTES:
 ${evidence || "No external sources were available. Clearly mark uncertain claims and avoid precise unsupported facts."}
 
-Write an original, voiceover-ready script. The first sentence must deliver the title's promise immediately. Open a curiosity gap, escalate with a reveal every 2–4 sentences, use concrete sensory language, and end with a satisfying payoff. Never invent a fact, quote, date, or source. Distinguish legend from verified history. Do not mention being an AI or the research process.
+Write an original, voiceover-ready script. The first sentence must deliver the title's promise immediately. Open a curiosity gap, escalate with a reveal every 2–4 sentences, use concrete sensory language, and end with a satisfying payoff. Never invent a fact, quote, date, or source. Distinguish legend from verified history. Add compact inline source markers such as [1] after every important factual claim, using only the numbered SOURCE NOTES above. Do not cite a source that does not support the claim. Do not mention being an AI or the research process.
 
 Return ONLY valid JSON matching this shape:
 {
