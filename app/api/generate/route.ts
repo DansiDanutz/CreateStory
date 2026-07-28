@@ -3,6 +3,7 @@ import { research, writeStory } from "@/lib/server/engines";
 import { validateInput } from "@/lib/validation";
 import type { GenerateResponse } from "@/lib/types";
 import { authorize, enforceRateLimit } from "@/lib/server/security";
+import { selectEditorialWinner } from "@/lib/scoring";
 
 export const maxDuration = 300;
 
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
       sources: researchPack.sources,
       researchEngine: researchPack.engine,
       results,
+      editorial: selectEditorialWinner(results),
     };
     return NextResponse.json(response);
   } catch (error) {
