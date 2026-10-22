@@ -26,7 +26,7 @@ function asStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function normalize(provider: Provider, model: string, text: string): ScriptResult {
+function normalize(provider: Provider, model: string, text: string, sources: Source[]): ScriptResult {
   const data = parseJson(text);
   if (typeof data.narration !== "string" || typeof data.title !== "string") throw new Error("The model returned an incomplete script.");
   return finalizeScript({
@@ -41,7 +41,7 @@ function normalize(provider: Provider, model: string, text: string): ScriptResul
     cta: typeof data.cta === "string" ? data.cta : "",
     whyItWorks: typeof data.whyItWorks === "string" ? data.whyItWorks : "",
     scores: data.scores && typeof data.scores === "object" ? data.scores as Partial<ScriptResult["scores"]> : undefined,
-  });
+  }, sources);
 }
 
 type ResearchBatch = { engine: string; sources: Source[]; summary?: string };
@@ -195,7 +195,7 @@ async function writeOpenAI(input: GenerateInput, summary: string, sources: Sourc
   });
   const data = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
   const text = data.output_text || data.output?.flatMap(item => item.content || []).map(item => item.text || "").join("") || "";
-  return normalize("openai", model, text);
+  return normalize("openai", model, text, sources);
 }
 
 async function writeAnthropic(input: GenerateInput, summary: string, sources: Source[]): Promise<ScriptResult> {
@@ -208,7 +208,7 @@ async function writeAnthropic(input: GenerateInput, summary: string, sources: So
     body: JSON.stringify({ model, max_tokens: writerTokenLimit(input), messages: [{ role: "user", content: buildWriterPrompt(input, summary, sources, "Claude") }] }),
   });
   const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
-  return normalize("anthropic", model, (data.content || []).filter(item => item.type === "text").map(item => item.text || "").join(""));
+  return normalize("anthropic", model, (data.content || []).filter(item => item.type === "text").map(item => item.text || "").join(""), sources);
 }
 
 async function writeKimi(input: GenerateInput, summary: string, sources: Source[]): Promise<ScriptResult> {
@@ -221,7 +221,7 @@ async function writeKimi(input: GenerateInput, summary: string, sources: Source[
     body: JSON.stringify({ model, temperature: 1, max_tokens: writerTokenLimit(input), messages: [{ role: "system", content: "You are an independent, meticulous, original factual storyteller." }, { role: "user", content: buildWriterPrompt(input, summary, sources, "Kimi") }] }),
   });
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-  return normalize("kimi", model, data.choices?.[0]?.message?.content || "");
+  return normalize("kimi", model, data.choices?.[0]?.message?.content || "", sources);
 }
 
 const writers = { openai: writeOpenAI, anthropic: writeAnthropic, kimi: writeKimi };
@@ -231,7 +231,7 @@ export async function writeStory(provider: Provider, input: GenerateInput, summa
     return await writers[provider](input, summary, sources);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown provider error";
-    return finalizeScript({ provider, model: "unavailable", title: `${provider} could not complete this run`, titleIdeas: [], hook: "", narration: "", visualBeats: [], soundDesign: [], cta: "", whyItWorks: "", scores: { hook: 1, retention: 1, clarity: 1, originality: 1, factuality: 1 }, error: message });
+    return finalizeScript({ provider, model: "unavailable", title: `${provider} could not complete this run`, titleIdeas: [], hook: "", narration: "", visualBeats: [], soundDesign: [], cta: "", whyItWorks: "", scores: { hook: 1, retention: 1, clarity: 1, originality: 1, factuality: 1 }, error: message }, sources);
   }
 }
 

@@ -51,7 +51,15 @@ export interface ScriptResult {
   wordCount: number;
   estimatedSeconds: number;
   scores: { hook: number; retention: number; clarity: number; originality: number; factuality: number; overall: number };
+  citedSourceIndexes?: number[];
+  factCheck?: { status: "grounded" | "review" | "unverified"; coverage: number; warnings: string[] };
   error?: string;
+}
+
+export interface EditorialDecision {
+  winner: Provider | null;
+  score: number;
+  rationale: string;
 }
 
 export interface GenerateResponse {
@@ -62,10 +70,11 @@ export interface GenerateResponse {
   sources: Source[];
   researchEngine: string;
   results: ScriptResult[];
+  editorial?: EditorialDecision;
 }
 
 export interface Capabilities {
-  providers: Record<Provider, { configured: boolean; model: string }>;
+  providers: Record<Provider, { configured: boolean; model: string; status: "configured" | "missing" }>;
   research: Record<string, boolean>;
   installedTools: string[];
   installedPlugins: string[];

@@ -8,9 +8,9 @@ export async function GET(request: Request) {
   if (!authorize(request)) return NextResponse.json({ error: "Invalid studio access code." }, { status: 401 });
   const capabilities: Capabilities = {
     providers: {
-      openai: { configured: Boolean(process.env.OPENAI_API_KEY), model: process.env.OPENAI_MODEL || "gpt-5" },
-      anthropic: { configured: Boolean(process.env.ANTHROPIC_API_KEY), model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6" },
-      kimi: { configured: Boolean(process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY || process.env.KIMI_MOONSHOT_API_KEY), model: process.env.KIMI_MODEL || "kimi-k2.5" },
+      openai: { configured: Boolean(process.env.OPENAI_API_KEY), status: process.env.OPENAI_API_KEY ? "configured" : "missing", model: process.env.OPENAI_MODEL || "gpt-5" },
+      anthropic: { configured: Boolean(process.env.ANTHROPIC_API_KEY), status: process.env.ANTHROPIC_API_KEY ? "configured" : "missing", model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6" },
+      kimi: { configured: Boolean(process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY || process.env.KIMI_MOONSHOT_API_KEY), status: process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY || process.env.KIMI_MOONSHOT_API_KEY ? "configured" : "missing", model: process.env.KIMI_MODEL || "kimi-k2.5" },
     },
     research: {
       Tavily: Boolean(process.env.TAVILY_API_KEY),

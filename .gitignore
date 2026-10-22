@@ -12,3 +12,6 @@ coverage
 .DS_Store
 .omx
 .playwright-mcp
+
+# Local Netlify folder
+.netlify
